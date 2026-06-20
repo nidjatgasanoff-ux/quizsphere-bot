@@ -57,7 +57,7 @@ THEMES_RU = {
 
 def generate_quiz(theme_key: str, quiz_num: int) -> str:
     theme_label = THEMES.get(theme_key, "Natural Health Facts")
-    user_prompt = f"Generate Quiz #{quiz_num} on theme: \"{theme_label}\". Mix all 4 categories. Make questions surprising and educational. Spread correct answers across A, B, C positions."
+    user_prompt = f'Generate Quiz #{quiz_num} on theme: "{theme_label}". Mix all 4 categories. Make questions surprising and educational. Spread correct answers across A, B, C positions.'
 
     response = requests.post(
         "https://api.anthropic.com/v1/messages",
@@ -108,28 +108,32 @@ async def theme_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     theme_key = query.data.replace("theme_", "")
     theme_ru = THEMES_RU.get(theme_key, "🌿 Натуральное здоровье")
 
-    await query.edit_message_text(f"⏳ Генерирую квиз на тему «{theme_ru}»...\nЭто займёт около 20 секунд 🙏")
+    await query.edit_message_text(
+        f"⏳ Генерирую квиз на тему {theme_ru}...\nЭто займёт около 20 секунд 🙏"
+    )
 
     quiz_num = context.bot_data.get("quiz_num", 11)
     context.bot_data["quiz_num"] = quiz_num + 1
 
     try:
         result = generate_quiz(theme_key, quiz_num)
-        header = f"📋 *Квиз #{quiz_num} — {theme_ru}*\n\n"
+        header = f"Квиз #{quiz_num} — {theme_ru}\n\n"
         full_text = header + result
 
         if len(full_text) <= 4096:
-            await query.message.reply_text(full_text, parse_mode="Markdown")
+            await query.message.reply_text(full_text)
         else:
             chunks = [full_text[i:i+4000] for i in range(0, len(full_text), 4000)]
             for chunk in chunks:
-                await query.message.reply_text(chunk, parse_mode="Markdown")
+                await query.message.reply_text(chunk)
 
         keyboard = [[InlineKeyboardButton("🔄 Создать ещё квиз", callback_data="new_quiz")]]
         await query.message.reply_text("✅ Готово!", reply_markup=InlineKeyboardMarkup(keyboard))
 
     except Exception as e:
-        await query.message.reply_text(f"❌ Ошибка при генерации. Попробуй ещё раз: /quiz\n\n{str(e)}")
+        await query.message.reply_text(
+            f"❌ Ошибка при генерации. Попробуй ещё раз: /quiz\n\n{str(e)}"
+        )
 
 
 async def new_quiz_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -145,7 +149,9 @@ async def new_quiz_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(THEMES_RU["plant_facts"], callback_data="theme_plant_facts")],
         [InlineKeyboardButton(THEMES_RU["superfoods"], callback_data="theme_superfoods")],
     ]
-    await query.edit_message_text("🎯 Выбери тему квиза:", reply_markup=InlineKeyboardMarkup(keyboard))
+    await query.edit_message_text(
+        "🎯 Выбери тему квиза:", reply_markup=InlineKeyboardMarkup(keyboard)
+    )
 
 
 def main():
@@ -154,8 +160,8 @@ def main():
     app.add_handler(CommandHandler("quiz", quiz_command))
     app.add_handler(CallbackQueryHandler(theme_callback, pattern="^theme_"))
     app.add_handler(CallbackQueryHandler(new_quiz_callback, pattern="^new_quiz$"))
-    print("QuizSphere Bot запущен! 🚀")
-    app.run_polling()
+    print("QuizSphere Bot запущен!")
+    app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
 if __name__ == "__main__":
