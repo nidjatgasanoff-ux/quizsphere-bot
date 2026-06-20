@@ -75,8 +75,7 @@ def generate_quiz(theme_key: str, quiz_num: int) -> str:
         timeout=60,
     )
     data = response.json()
-print(data)
-return data["content"][0]["text"]
+    return data["content"][0]["text"]
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
