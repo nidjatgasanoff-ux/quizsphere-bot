@@ -1,52 +1,57 @@
 import os
 import requests
+import json
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
-SYSTEM_PROMPT_SHORTS = """You are a YouTube Shorts quiz creator about natural health and nutrition.
+SYSTEM_PROMPT_SHORTS = """Ты — эксперт по созданию вирусных квизов для YouTube Shorts и Telegram о здоровье и питании.
 
-RULES:
-- No medical advice, no disease treatment claims
-- Questions must be 12-14 words - engaging and curiosity-driven
-- Start questions with: Which, What, How, Why, Did you know
-- Answer options must be 2-5 words each
-- Answer options must be SHORT - maximum 3 words each
-- Include a brief explanation (1 sentence) for the correct answer
-- Use safe wording: supports, is associated with, is known for
+Генерируй **ровно 5 вопросов** в формате JSON:
 
-OUTPUT FORMAT - follow exactly:
+{
+  "questions": [
+    {
+      "question": "Вопрос строго от 10 до 14 слов. Должен быть цепляющим, интересным и динамичным.",
+      "options": ["Вариант 3-5 слов", "Вариант 3-5 слов", "Вариант 3-5 слов", "Вариант 3-5 слов"],
+      "correct_index": 0,
+      "explanation": "Короткое объяснение (2-4 предложения) с пользой для человека. Используй безопасные формулировки."
+    }
+  ]
+}
 
-[Short English question - max 7 words]
-([Russian translation])
-A) [short option]
-B) [short option]
-C) [short option]
-Correct: [A or B or C]) [answer] - [1 sentence explanation] ([Russian translation of answer and explanation])
----
+Правила:
+- Вопрос: ровно 10-14 слов.
+- Каждый вариант ответа: 3-5 слов максимум.
+- Всегда 4 варианта.
+- correct_index — число от 0 до 3.
+- Темы: натуральное здоровье, питание, витамины, суперфуды, сон, иммунитет, мозг и т.д.
+- Язык вопросов и ответов — русский, живой и разговорный.
+- Без медицинских советов и лечения болезней.
+- Используй safe wording: поддерживает, способствует, известен тем, что и т.д."""
 
-Spread correct answers across A, B, C. Generate exactly 10 questions. Start immediately with question 1."""
+SYSTEM_PROMPT_LONG = """Ты — эксперт по созданию образовательных квизов о натуральном здоровье и питании.
 
-SYSTEM_PROMPT_LONG = """You are a YouTube quiz creator about natural health and nutrition.
+Генерируй **ровно 5 вопросов** в формате JSON:
 
-RULES:
-- No medical advice, no disease treatment claims
-- Use safe wording: supports, is associated with, is known for, contributes to, traditionally used
-- Questions must be accurate, educational, and interesting
+{
+  "questions": [
+    {
+      "question": "Развёрнутый интересный вопрос",
+      "options": ["Вариант 1", "Вариант 2", "Вариант 3", "Вариант 4"],
+      "correct_index": 0,
+      "explanation": "Подробное объяснение 2-4 предложения с пользой."
+    }
+  ]
+}
 
-OUTPUT FORMAT - follow exactly:
-
-[English question]
-([Russian translation])
-A) [option]
-B) [option]
-C) [option]
-Correct: [A or B or C]) [answer] - [2-3 sentence explanation] ([Russian translation of answer and explanation])
----
-
-Spread correct answers across A, B, C. Generate exactly 10 questions. Start immediately with question 1."""
+Правила:
+- Вопросы должны быть точными, интересными и образовательными.
+- Используй безопасные формулировки: поддерживает, способствует, известен, ассоциируется с.
+- Без медицинских советов и лечения болезней.
+- Язык — русский."""
 
 THEMES_RU = {
     "natural_health": "🌿 Натуральное здоровье",
@@ -87,9 +92,36 @@ THEMES_EN = {
 }
 
 
+def format_quiz_result(raw_text: str, is_shorts: bool) -> str:
+    try:
+        # Пытаемся распарсить JSON
+        data = json.loads(raw_text)
+        questions = data.get("questions", [])
+        
+        result = []
+        for i, q in enumerate(questions, 1):
+            result.append(f"🔥 Вопрос {i}:\n{q['question']}\n")
+            
+            options = q.get("options", [])
+            correct_idx = q.get("correct_index", 0)
+            
+            for idx, opt in enumerate(options):
+                mark = "✅ " if idx == correct_idx else ""
+                letter = chr(65 + idx)  # A, B, C, D
+                result.append(f"{letter}) {mark}{opt}")
+            
+            result.append(f"\n💡 Объяснение: {q.get('explanation', '')}\n")
+            result.append("─" * 30 + "\n")
+        
+        return "\n".join(result)
+    except:
+        # Если JSON не получился — возвращаем как есть
+        return raw_text
+
+
 def generate_quiz(theme_label: str, quiz_num: int, is_shorts: bool) -> str:
     prompt = SYSTEM_PROMPT_SHORTS if is_shorts else SYSTEM_PROMPT_LONG
-    user_prompt = f'Generate Quiz #{quiz_num} on theme: "{theme_label}". Make questions surprising and educational.'
+    user_prompt = f'Generate Quiz #{quiz_num} on theme: "{theme_label}". Make questions surprising, educational and high quality.'
 
     response = requests.post(
         "https://api.groq.com/openai/v1/chat/completions",
@@ -99,7 +131,8 @@ def generate_quiz(theme_label: str, quiz_num: int, is_shorts: bool) -> str:
         },
         json={
             "model": "llama-3.3-70b-versatile",
-            "max_tokens": 2000,
+            "max_tokens": 2500,
+            "temperature": 0.7,
             "messages": [
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": user_prompt},
@@ -108,7 +141,11 @@ def generate_quiz(theme_label: str, quiz_num: int, is_shorts: bool) -> str:
         timeout=60,
     )
     data = response.json()
-    return data["choices"][0]["message"]["content"]
+    raw_content = data["choices"][0]["message"]["content"]
+    
+    if is_shorts:
+        return format_quiz_result(raw_content, is_shorts)
+    return raw_content
 
 
 def get_theme_keyboard():
@@ -133,6 +170,7 @@ def get_theme_keyboard():
     ]
 
 
+# Остальные функции без изменений (start, quiz_command, format_callback и т.д.)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "👋 Привет! Я QuizSphere Bot 🌿\n\n"
@@ -170,7 +208,7 @@ async def theme_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data == "custom_theme":
         context.user_data["waiting_for_theme"] = True
-        await query.edit_message_text("✏️ Напиши свою тему!\n\nНапример: Animals, Space, History...")
+        await query.edit_message_text("✏️ Напиши свою тему!\n\nНапример: Суперфуды, Сон, Иммунитет...")
         return
 
     theme_key = query.data.replace("theme_", "")
@@ -183,7 +221,7 @@ async def theme_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["last_theme_en"] = theme_en
 
     fmt = "📱 Shorts" if is_shorts else "🎬 Long video"
-    await query.edit_message_text(f"⏳ Генерирую {fmt} квиз на тему {theme_ru}...\nЭто займёт около 10 секунд 🙏")
+    await query.edit_message_text(f"⏳ Генерирую {fmt} квиз на тему {theme_ru}...\nЭто займёт около 10-15 секунд 🙏")
 
     quiz_num = context.bot_data.get("quiz_num", 11)
     context.bot_data["quiz_num"] = quiz_num + 1
@@ -191,7 +229,7 @@ async def theme_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         result = generate_quiz(theme_en, quiz_num, is_shorts)
         fmt_label = "📱 SHORTS" if is_shorts else "🎬 LONG VIDEO"
-        full_text = f"{fmt_label} | Квиз #{quiz_num} — {theme_ru}\n\n" + result
+        full_text = f"{fmt_label} | Квиз #{quiz_num} — {theme_ru}\n\n{result}"
 
         if len(full_text) <= 4096:
             await query.message.reply_text(full_text)
@@ -226,7 +264,7 @@ async def repeat_theme_callback(update: Update, context: ContextTypes.DEFAULT_TY
     try:
         result = generate_quiz(theme_en, quiz_num, is_shorts)
         fmt_label = "📱 SHORTS" if is_shorts else "🎬 LONG VIDEO"
-        full_text = f"{fmt_label} | Квиз #{quiz_num} — {theme_ru}\n\n" + result
+        full_text = f"{fmt_label} | Квиз #{quiz_num} — {theme_ru}\n\n{result}"
 
         if len(full_text) <= 4096:
             await query.message.reply_text(full_text)
@@ -263,7 +301,7 @@ async def handle_custom_theme(update: Update, context: ContextTypes.DEFAULT_TYPE
     try:
         result = generate_quiz(theme, quiz_num, is_shorts)
         fmt_label = "📱 SHORTS" if is_shorts else "🎬 LONG VIDEO"
-        full_text = f"{fmt_label} | Квиз #{quiz_num} — {theme}\n\n" + result
+        full_text = f"{fmt_label} | Квиз #{quiz_num} — {theme}\n\n{result}"
 
         if len(full_text) <= 4096:
             await update.message.reply_text(full_text)
@@ -303,7 +341,7 @@ def main():
     app.add_handler(CallbackQueryHandler(theme_callback, pattern="^custom_theme$"))
     app.add_handler(CallbackQueryHandler(repeat_theme_callback, pattern="^repeat_theme$"))
     app.add_handler(CallbackQueryHandler(new_quiz_callback, pattern="^new_quiz$"))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_custom_theme))
+    app.add_handler(MessageHandler(filters.TEXT & \~filters.COMMAND, handle_custom_theme))
     print("QuizSphere Bot запущен!")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
