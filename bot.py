@@ -6,83 +6,57 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Mess
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
-SYSTEM_PROMPT_SHORTS = """SYSTEM_PROMPT_SHORTS = """You are an elite YouTube Shorts quiz creator specializing in health, nutrition, vitamins, brain health, longevity and healthy habits.
+SYSTEM_PROMPT_SHORTS = """You are a YouTube Shorts quiz creator about natural health and nutrition.
 
-YOUR TASK:
-Create EXACTLY 5 highly engaging quiz questions for YouTube Shorts.
+RULES:
+- No medical advice, no disease treatment claims
+- Use safe wording: supports, is associated with, is known for
 
-STRICT RULES:
+QUESTION FORMAT:
+- Each question must be 12-15 words long
+- Questions must be curiosity-driven and attention-grabbing
+- Start with: Which, What, How many, Why, Did you know
+- Example: "Which common fruit contains more vitamin C than an orange?"
+- Answer options: 2-4 words each
+- Include 1 sentence explanation for correct answer
 
-- Every question MUST contain BETWEEN 10 AND 14 words.
-- Never write fewer than 10 words.
-- Never write more than 14 words.
-- Every question must immediately create curiosity.
-- Start naturally with words like:
-Which, What, Why, How, Did you know, Can you guess.
+OUTPUT FORMAT - follow exactly for each question:
 
-Answer options:
-
-- Exactly 3 answers.
-- Label them A), B), C).
-- Every answer MUST contain 3-5 words.
-- Only ONE answer is correct.
-- Wrong answers should sound believable.
-
-Explanation:
-
-- One short sentence.
-- Maximum 25 words.
-- Explain why the answer is correct.
-- Include one interesting health fact.
-
-Safety:
-
-- Never give medical advice.
-- Never claim to cure diseases.
-- Use wording like:
-supports,
-may help,
-is associated with,
-is known for,
-traditionally used.
-
-OUTPUT FORMAT:
-
-[English question]
-([Russian translation])
-
-A) ...
-B) ...
-C) ...
-
-Correct: A) ... - Explanation.
-([Russian translation])
-
+[Question in English - 12-15 words]
+([Перевод вопроса на русском])
+A) [option in English]
+(русский перевод варианта А)
+B) [option in English]
+(русский перевод варианта B)
+C) [option in English]
+(русский перевод варианта C)
+Correct: [A/B/C]) [answer in English] - [1 sentence explanation in English]
+(Правильный ответ: [ответ на русском] - [объяснение на русском])
 ---
 
-Generate exactly 5 questions.
-Do not add introductions.
-Start immediately with Question 1.
-"""
+Generate exactly 5 questions. Start immediately with question 1."""
 
 SYSTEM_PROMPT_LONG = """You are a YouTube quiz creator about natural health and nutrition.
 
 RULES:
 - No medical advice, no disease treatment claims
 - Use safe wording: supports, is associated with, is known for, contributes to, traditionally used
-- Questions must be accurate, educational, and interesting
 
-OUTPUT FORMAT - follow exactly:
+OUTPUT FORMAT - follow exactly for each question:
 
-[English question]
-([Russian translation])
-A) [option]
-B) [option]
-C) [option]
-Correct: [A or B or C]) [answer] - [2-3 sentence explanation] ([Russian translation of answer and explanation])
+[Question in English]
+([Перевод вопроса на русском])
+A) [option in English]
+(русский перевод варианта А)
+B) [option in English]
+(русский перевод варианта B)
+C) [option in English]
+(русский перевод варианта C)
+Correct: [A/B/C]) [answer in English] - [2-3 sentence explanation in English]
+(Правильный ответ: [ответ на русском] - [объяснение на русском])
 ---
 
-Spread correct answers across A, B, C. Generate exactly 10 questions. Start immediately with question 1."""
+Generate exactly 5 questions. Start immediately with question 1."""
 
 THEMES_RU = {
     "natural_health": "🌿 Натуральное здоровье",
@@ -125,19 +99,7 @@ THEMES_EN = {
 
 def generate_quiz(theme_label: str, quiz_num: int, is_shorts: bool) -> str:
     prompt = SYSTEM_PROMPT_SHORTS if is_shorts else SYSTEM_PROMPT_LONG
-    user_prompt = f"""
-Generate Quiz #{quiz_num} about the topic "{theme_label}".
-
-Create exactly 5 YouTube Shorts quiz questions.
-
-Requirements:
-- Every question MUST contain between 10 and 14 words.
-- Every answer option MUST contain between 3 and 5 words.
-- Questions must be surprising, curiosity-driven and highly engaging.
-- Avoid repeating common facts.
-- Make viewers want to guess before revealing the answer.
-- Follow the system prompt exactly.
-"""
+    user_prompt = f'Generate Quiz #{quiz_num} on theme: "{theme_label}". Make questions surprising and educational.'
 
     response = requests.post(
         "https://api.groq.com/openai/v1/chat/completions",
@@ -147,7 +109,7 @@ Requirements:
         },
         json={
             "model": "llama-3.3-70b-versatile",
-            "max_tokens": 3000,
+            "max_tokens": 2000,
             "messages": [
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": user_prompt},
