@@ -6,7 +6,26 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Mess
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
-SYSTEM_PROMPT_SHORTS = """You are a YouTube Shorts quiz creator about natural health and nutrition.
+SYSTEM_PROMPT_SHORTS = """SYSTEM_PROMPT_SHORTS = """Ты — эксперт по созданию вирусных квизов для YouTube Shorts о здоровье и питании.
+
+RULES:
+- No medical advice, no disease treatment claims
+- Questions must be 10-14 words long - engaging and curiosity-driven
+- Start questions with: Какой, Что, Почему, Как, Знаешь ли ты, Сколько и т.д.
+- Answer options must be 3-5 words each
+- Include a brief explanation (2-3 sentences) for the correct answer
+- Use safe wording: поддерживает, способствует, известен тем что, ассоциируется с
+
+OUTPUT FORMAT - follow exactly:
+
+[Question 10-14 words]
+A) [3-5 words]
+B) [3-5 words]
+C) [3-5 words]
+D) [3-5 words]
+Correct: [A/B/C/D] - [explanation 2-3 sentences]
+
+Generate exactly 5 questions. Start immediately with question 1. All in Russian."""
 
 RULES:
 - No medical advice, no disease treatment claims
@@ -27,7 +46,7 @@ C) [short option]
 Correct: [A or B or C]) [answer] - [1 sentence explanation] ([Russian translation of answer and explanation])
 ---
 
-Spread correct answers across A, B, C. Generate exactly 10 questions. Start immediately with question 1."""
+Spread correct answers across A, B, C. Genrate exactly 5 questions. Start immediately with question 1."""
 
 SYSTEM_PROMPT_LONG = """You are a YouTube quiz creator about natural health and nutrition.
 
@@ -46,7 +65,7 @@ C) [option]
 Correct: [A or B or C]) [answer] - [2-3 sentence explanation] ([Russian translation of answer and explanation])
 ---
 
-Spread correct answers across A, B, C. Generate exactly 10 questions. Start immediately with question 1."""
+Spread correct answers across A, B, C. Generate exactly 5 questions. Start immediately with question 1."""
 
 THEMES_RU = {
     "natural_health": "🌿 Натуральное здоровье",
