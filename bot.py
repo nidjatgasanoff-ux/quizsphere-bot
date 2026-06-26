@@ -9,32 +9,29 @@ GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
 SYSTEM_PROMPT_SHORTS = """Ты — эксперт по созданию вирусных квизов для YouTube Shorts и Telegram о здоровье и питании.
 
-Генерируй **ровно 5 вопросов** в формате JSON:
+Генерируй ровно 5 вопросов в формате JSON:
 
 {
   "questions": [
     {
-      "question": "Вопрос строго от 10 до 14 слов. Должен быть цепляющим, интересным и динамичным.",
+      "question": "Вопрос строго от 10 до 14 слов. Должен быть цепляющим и интересным.",
       "options": ["Вариант 3-5 слов", "Вариант 3-5 слов", "Вариант 3-5 слов", "Вариант 3-5 слов"],
       "correct_index": 0,
-      "explanation": "Короткое объяснение (2-4 предложения) с пользой для человека. Используй безопасные формулировки."
+      "explanation": "Короткое полезное объяснение 2-4 предложения с пользой для человека."
     }
   ]
 }
 
 Правила:
-- Вопрос: ровно 10-14 слов.
-- Каждый вариант ответа: 3-5 слов максимум.
-- Всегда 4 варианта.
-- correct_index — число от 0 до 3.
-- Темы: натуральное здоровье, питание, витамины, суперфуды, сон, иммунитет, мозг и т.д.
-- Язык вопросов и ответов — русский, живой и разговорный.
-- Без медицинских советов и лечения болезней.
-- Используй safe wording: поддерживает, способствует, известен тем, что и т.д."""
+- Вопрос всегда 10-14 слов
+- Каждый вариант ответа — 3-5 слов
+- Всегда 4 варианта (A, B, C, D)
+- Язык — русский, живой и разговорный
+- Без лечения болезней, используй мягкие формулировки"""
 
-SYSTEM_PROMPT_LONG = """Ты — эксперт по созданию образовательных квизов о натуральном здоровье и питании.
+SYSTEM_PROMPT_LONG = """Ты — эксперт по образовательным квизам о натуральном здоровье и питании.
 
-Генерируй **ровно 5 вопросов** в формате JSON:
+Генерируй ровно 5 вопросов в формате JSON:
 
 {
   "questions": [
@@ -42,16 +39,15 @@ SYSTEM_PROMPT_LONG = """Ты — эксперт по созданию образ
       "question": "Развёрнутый интересный вопрос",
       "options": ["Вариант 1", "Вариант 2", "Вариант 3", "Вариант 4"],
       "correct_index": 0,
-      "explanation": "Подробное объяснение 2-4 предложения с пользой."
+      "explanation": "Подробное объяснение 2-4 предложения."
     }
   ]
 }
 
 Правила:
-- Вопросы должны быть точными, интересными и образовательными.
-- Используй безопасные формулировки: поддерживает, способствует, известен, ассоциируется с.
-- Без медицинских советов и лечения болезней.
-- Язык — русский."""
+- Язык — русский
+- Используй безопасные формулировки: поддерживает, способствует, известен тем что и т.д.
+- Без медицинских советов"""
 
 THEMES_RU = {
     "natural_health": "🌿 Натуральное здоровье",
@@ -94,34 +90,27 @@ THEMES_EN = {
 
 def format_quiz_result(raw_text: str, is_shorts: bool) -> str:
     try:
-        # Пытаемся распарсить JSON
-        data = json.loads(raw_text)
+        data = json.loads(raw_text.strip())
         questions = data.get("questions", [])
-        
         result = []
         for i, q in enumerate(questions, 1):
-            result.append(f"🔥 Вопрос {i}:\n{q['question']}\n")
-            
+            result.append(f"🔥 Вопрос {i}\n{q['question']}\n")
             options = q.get("options", [])
-            correct_idx = q.get("correct_index", 0)
-            
+            correct = q.get("correct_index", 0)
             for idx, opt in enumerate(options):
-                mark = "✅ " if idx == correct_idx else ""
-                letter = chr(65 + idx)  # A, B, C, D
+                mark = "✅ " if idx == correct else ""
+                letter = chr(65 + idx)
                 result.append(f"{letter}) {mark}{opt}")
-            
             result.append(f"\n💡 Объяснение: {q.get('explanation', '')}\n")
-            result.append("─" * 30 + "\n")
-        
+            result.append("─" * 35 + "\n")
         return "\n".join(result)
     except:
-        # Если JSON не получился — возвращаем как есть
         return raw_text
 
 
 def generate_quiz(theme_label: str, quiz_num: int, is_shorts: bool) -> str:
     prompt = SYSTEM_PROMPT_SHORTS if is_shorts else SYSTEM_PROMPT_LONG
-    user_prompt = f'Generate Quiz #{quiz_num} on theme: "{theme_label}". Make questions surprising, educational and high quality.'
+    user_prompt = f'Generate Quiz #{quiz_num} on theme: "{theme_label}". Questions should be high quality and surprising.'
 
     response = requests.post(
         "https://api.groq.com/openai/v1/chat/completions",
@@ -138,14 +127,11 @@ def generate_quiz(theme_label: str, quiz_num: int, is_shorts: bool) -> str:
                 {"role": "user", "content": user_prompt},
             ],
         },
-        timeout=60,
+        timeout=70,
     )
-    data = response.json()
-    raw_content = data["choices"][0]["message"]["content"]
     
-    if is_shorts:
-        return format_quiz_result(raw_content, is_shorts)
-    return raw_content
+    data = response.json()
+    return data["choices"][0]["message"]["content"]
 
 
 def get_theme_keyboard():
@@ -170,24 +156,16 @@ def get_theme_keyboard():
     ]
 
 
-# Остальные функции без изменений (start, quiz_command, format_callback и т.д.)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "👋 Привет! Я QuizSphere Bot 🌿\n\n"
-        "Генерирую квизы о натуральном здоровье и питании.\n\n"
-        "Нажми /quiz чтобы начать!"
-    )
+    await update.message.reply_text("👋 Привет! Я QuizSphere Bot 🌿\n\nНажми /quiz чтобы начать!")
 
 
 async def quiz_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
-        [InlineKeyboardButton("📱 Shorts (короткие вопросы)", callback_data="format_shorts")],
-        [InlineKeyboardButton("🎬 Long video (развёрнутые вопросы)", callback_data="format_long")],
+        [InlineKeyboardButton("📱 Shorts (10-14 слов)", callback_data="format_shorts")],
+        [InlineKeyboardButton("🎬 Long video", callback_data="format_long")],
     ]
-    await update.message.reply_text(
-        "🎯 Выбери формат видео:",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+    await update.message.reply_text("🎯 Выбери формат:", reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 async def format_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -196,10 +174,7 @@ async def format_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     is_shorts = query.data == "format_shorts"
     context.user_data["is_shorts"] = is_shorts
     fmt = "📱 Shorts" if is_shorts else "🎬 Long video"
-    await query.edit_message_text(
-        f"Формат: {fmt}\n\n🎯 Теперь выбери тему:",
-        reply_markup=InlineKeyboardMarkup(get_theme_keyboard())
-    )
+    await query.edit_message_text(f"Формат: {fmt}\n\nВыбери тему:", reply_markup=InlineKeyboardMarkup(get_theme_keyboard()))
 
 
 async def theme_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -208,7 +183,7 @@ async def theme_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data == "custom_theme":
         context.user_data["waiting_for_theme"] = True
-        await query.edit_message_text("✏️ Напиши свою тему!\n\nНапример: Суперфуды, Сон, Иммунитет...")
+        await query.edit_message_text("✏️ Напиши свою тему:")
         return
 
     theme_key = query.data.replace("theme_", "")
@@ -216,70 +191,41 @@ async def theme_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     theme_en = THEMES_EN.get(theme_key, "Natural Health Facts")
     is_shorts = context.user_data.get("is_shorts", False)
 
-    context.user_data["last_theme_key"] = theme_key
     context.user_data["last_theme_ru"] = theme_ru
     context.user_data["last_theme_en"] = theme_en
 
-    fmt = "📱 Shorts" if is_shorts else "🎬 Long video"
-    await query.edit_message_text(f"⏳ Генерирую {fmt} квиз на тему {theme_ru}...\nЭто займёт около 10-15 секунд 🙏")
+    await query.edit_message_text(f"⏳ Генерирую квиз на тему {theme_ru}...")
 
-    quiz_num = context.bot_data.get("quiz_num", 11)
+    quiz_num = context.bot_data.get("quiz_num", 1)
     context.bot_data["quiz_num"] = quiz_num + 1
 
     try:
-        result = generate_quiz(theme_en, quiz_num, is_shorts)
-        fmt_label = "📱 SHORTS" if is_shorts else "🎬 LONG VIDEO"
-        full_text = f"{fmt_label} | Квиз #{quiz_num} — {theme_ru}\n\n{result}"
+        raw_result = generate_quiz(theme_en, quiz_num, is_shorts)
+        formatted = format_quiz_result(raw_result, is_shorts) if is_shorts else raw_result
+        
+        full_text = f"{'📱 SHORTS' if is_shorts else '🎬 LONG'} | Квиз #{quiz_num} — {theme_ru}\n\n{formatted}"
 
-        if len(full_text) <= 4096:
-            await query.message.reply_text(full_text)
-        else:
+        if len(full_text) > 4096:
             for chunk in [full_text[i:i+4000] for i in range(0, len(full_text), 4000)]:
                 await query.message.reply_text(chunk)
+        else:
+            await query.message.reply_text(full_text)
 
         keyboard = [
             [InlineKeyboardButton("🔄 Ещё по этой теме", callback_data="repeat_theme")],
-            [InlineKeyboardButton("🎯 Выбрать другую тему", callback_data="new_quiz")],
+            [InlineKeyboardButton("🎯 Другая тема", callback_data="new_quiz")],
         ]
         await query.message.reply_text("✅ Готово!", reply_markup=InlineKeyboardMarkup(keyboard))
 
     except Exception as e:
-        await query.message.reply_text(f"❌ Ошибка. Попробуй ещё раз: /quiz\n\n{str(e)}")
+        await query.message.reply_text(f"❌ Ошибка: {str(e)}\nПопробуй /quiz")
 
 
 async def repeat_theme_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-
-    theme_ru = context.user_data.get("last_theme_ru", "🌿 Натуральное здоровье")
-    theme_en = context.user_data.get("last_theme_en", "Natural Health Facts")
-    is_shorts = context.user_data.get("is_shorts", False)
-
-    fmt = "📱 Shorts" if is_shorts else "🎬 Long video"
-    await query.edit_message_text(f"⏳ Генерирую ещё {fmt} квиз на тему {theme_ru}...\n🙏 Секунду!")
-
-    quiz_num = context.bot_data.get("quiz_num", 11)
-    context.bot_data["quiz_num"] = quiz_num + 1
-
-    try:
-        result = generate_quiz(theme_en, quiz_num, is_shorts)
-        fmt_label = "📱 SHORTS" if is_shorts else "🎬 LONG VIDEO"
-        full_text = f"{fmt_label} | Квиз #{quiz_num} — {theme_ru}\n\n{result}"
-
-        if len(full_text) <= 4096:
-            await query.message.reply_text(full_text)
-        else:
-            for chunk in [full_text[i:i+4000] for i in range(0, len(full_text), 4000)]:
-                await query.message.reply_text(chunk)
-
-        keyboard = [
-            [InlineKeyboardButton("🔄 Ещё по этой теме", callback_data="repeat_theme")],
-            [InlineKeyboardButton("🎯 Выбрать другую тему", callback_data="new_quiz")],
-        ]
-        await query.message.reply_text("✅ Готово!", reply_markup=InlineKeyboardMarkup(keyboard))
-
-    except Exception as e:
-        await query.message.reply_text(f"❌ Ошибка. Попробуй ещё раз: /quiz\n\n{str(e)}")
+    # Повторяем логику theme_callback (упрощённо)
+    await theme_callback(update, context)  # Можно улучшить позже
 
 
 async def handle_custom_theme(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -288,48 +234,27 @@ async def handle_custom_theme(update: Update, context: ContextTypes.DEFAULT_TYPE
     context.user_data["waiting_for_theme"] = False
     theme = update.message.text
     is_shorts = context.user_data.get("is_shorts", False)
-
     context.user_data["last_theme_ru"] = theme
     context.user_data["last_theme_en"] = theme
 
-    fmt = "📱 Shorts" if is_shorts else "🎬 Long video"
-    await update.message.reply_text(f"⏳ Генерирую {fmt} квиз на тему «{theme}»...\n🙏 Секунду!")
+    await update.message.reply_text(f"⏳ Генерирую квиз на тему «{theme}»...")
 
-    quiz_num = context.bot_data.get("quiz_num", 11)
+    quiz_num = context.bot_data.get("quiz_num", 1)
     context.bot_data["quiz_num"] = quiz_num + 1
 
     try:
-        result = generate_quiz(theme, quiz_num, is_shorts)
-        fmt_label = "📱 SHORTS" if is_shorts else "🎬 LONG VIDEO"
-        full_text = f"{fmt_label} | Квиз #{quiz_num} — {theme}\n\n{result}"
-
-        if len(full_text) <= 4096:
-            await update.message.reply_text(full_text)
-        else:
-            for chunk in [full_text[i:i+4000] for i in range(0, len(full_text), 4000)]:
-                await update.message.reply_text(chunk)
-
-        keyboard = [
-            [InlineKeyboardButton("🔄 Ещё по этой теме", callback_data="repeat_theme")],
-            [InlineKeyboardButton("🎯 Выбрать другую тему", callback_data="new_quiz")],
-        ]
-        await update.message.reply_text("✅ Готово!", reply_markup=InlineKeyboardMarkup(keyboard))
-
+        raw_result = generate_quiz(theme, quiz_num, is_shorts)
+        formatted = format_quiz_result(raw_result, is_shorts) if is_shorts else raw_result
+        full_text = f"{'📱 SHORTS' if is_shorts else '🎬 LONG'} | Квиз #{quiz_num} — {theme}\n\n{formatted}"
+        await update.message.reply_text(full_text)
     except Exception as e:
-        await update.message.reply_text(f"❌ Ошибка. Попробуй ещё раз: /quiz\n\n{str(e)}")
+        await update.message.reply_text(f"❌ Ошибка: {str(e)}")
 
 
 async def new_quiz_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    keyboard = [
-        [InlineKeyboardButton("📱 Shorts (короткие вопросы)", callback_data="format_shorts")],
-        [InlineKeyboardButton("🎬 Long video (развёрнутые вопросы)", callback_data="format_long")],
-    ]
-    await query.edit_message_text(
-        "🎯 Выбери формат видео:",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+    await quiz_command(update, context)  # Возврат к выбору формата
 
 
 def main():
@@ -342,7 +267,8 @@ def main():
     app.add_handler(CallbackQueryHandler(repeat_theme_callback, pattern="^repeat_theme$"))
     app.add_handler(CallbackQueryHandler(new_quiz_callback, pattern="^new_quiz$"))
     app.add_handler(MessageHandler(filters.TEXT & \~filters.COMMAND, handle_custom_theme))
-    print("QuizSphere Bot запущен!")
+    
+    print("✅ QuizSphere Bot запущен!")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
